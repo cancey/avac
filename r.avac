@@ -1,0 +1,479 @@
+#!/bin/bash
+#
+################################################################################
+#
+# MODULE:		r.avac
+# AUTHOR(S):	Christophe Ancey (geoclaw avac lib) & Vincent Bain (grass gis frontend)
+# PURPOSE:		Providing a frontend to geoCLAW computing library,
+#				esp. applied to dense snow avalanche simulations
+#				Mainly developed for toraval internal use
+# COPYRIGHT:	(C) 2019 by the GRASS Development Team and Toraval-Vincent Bain
+#				This program is free software under the GNU General
+#				Public License (>=v2). Read the file COPYING that comes
+#				with GRASS for details.
+
+# VERSION:		1.1 20191027
+#				Currently only supports level_1 AMR calculations
+#			
+################################################################################
+
+
+#%Module
+#% description: this module is a frontend to geoCLAW computing library applied to dense snow avalanches simulations. For more information see http://www.clawpack.org/
+#% keywords: raster, avac, snow avalanche, simulation, clawpack, geoclaw
+#%End
+
+#%option G_OPT_STRDS_OUTPUT
+#% key: simul
+#% required: yes
+#% description: output simulation STRDS
+#%end
+
+#%option G_OPT_R_MAP
+#% key: dem
+#% required: yes
+#% multiple: no
+#% description: input elevation raster map
+#%end
+
+
+#%option G_OPT_V_MAP
+#% key: za
+#% required: yes
+#% multiple: no
+#% label: input starting area vector map
+#% description: input starting area vector map
+#% guidependency: depth
+#%end
+#%option G_OPT_DB_COLUMN
+#% key: depth
+#% type: string
+#% required: yes
+#% description: depth column for starting area
+#%End
+
+#%Option
+#% key: dt
+#% type: string
+#% required: no
+#% label: time increment
+#% description: time series frame period in seconds
+#% answer: 20
+#%End
+
+#%Option
+#% key: t
+#% type: string
+#% required: no
+#% label: simulation duration
+#% description: simulation duration expressed in seconds
+#% answer: 100
+#%End
+
+#%Option
+#% key: rho
+#% type: string
+#% required: no
+#% answer: 300
+#% label: snow density
+#% description: snow density expressed in kg.m-3
+#%End
+
+#%Option
+#% key: xi
+#% type: string
+#% required: no
+#% answer: 1500
+#% label: Voellmy xi
+#% description: Voellmy xi value
+#%End
+
+#%Option
+#% key: mu
+#% type: string
+#% required: no
+#% answer: 0.15
+#% label: Voellmy mu
+#% description: Voellmy mu value
+#%End
+
+#%Option
+#% key: vthres
+#% type: string
+#% required: no
+#% answer: 0.05
+#% label: velocity threshold
+#% description: velocity threshold for code termination
+#%End
+
+#%Option
+#% key: bslope
+#% type: string
+#% required: no
+#% answer: 1.1
+#% label: beta slope
+#% description: beta slope
+#%End
+
+#%flag
+#% key: m
+#% description: compute max(h) and max(p) maps throughout simul strds
+#%end
+
+#%flag
+#% key: r
+#% description: reset existing simul strds
+#%end
+
+#%flag
+#% key: c
+#% description: run geoclaw 'make clobber'
+#%end
+
+#---------------------------------------------
+# Get environnment
+#---------------------------------------------
+if  test "$GISBASE" = ""; then
+	echo "You must be in GRASS GIS to run this program." 1>&2
+	exit 1
+fi
+if [ "$1" != "@ARGS_PARSED@" ] ; then
+    exec g.parser "$0" "$@"
+fi
+
+GIS_DBASE=`g.gisenv get=GISDBASE`
+GIS_LOCATION_NAME=`g.gisenv get=LOCATION_NAME`
+GIS_MAPSET=`g.gisenv get=MAPSET`
+GIS_MAP_PATH="${GIS_DBASE}/${GIS_LOCATION_NAME}/${GIS_MAPSET}"
+
+
+#---------------------------------------------
+# Check inputs
+#---------------------------------------------
+ctrl=`t.list where=name=\"$GIS_OPT_simul"_"h\" --q`
+if [ $GIS_FLAG_r -eq 0 -a "$ctrl" != "" ] ; then
+	g.message -w "strds '$GIS_OPT_simul' already exists, use -r flag to overwrite"
+	exit 1
+fi
+
+eval `g.findfile element=cell file="$GIS_OPT_dem"`
+if [ ! "$file" ] ; then
+	g.message -e "Raster map '$GIS_OPT_dem' not found"
+	exit 1
+fi
+
+eval `g.findfile element=vector file="$GIS_OPT_za"`
+if [ ! "$file" ] ; then
+	g.message -e "Vector map '$GIS_OPT_za' not found"
+	exit 1
+fi
+
+tablecheck=`v.db.connect -c map=${GIS_OPT_za} 2>/dev/null`
+if [ ! "${tablecheck}" ] ; then
+	g.message -e "Vector map $GIS_OPT_za is not connected to any database table!"
+	exit 1
+else
+	table=`v.db.connect -g map=$GIS_OPT_za | awk 'BEGIN{FS="|"} {print $2}'`
+	attributecheck=`db.columns table=$table | grep  -w $GIS_OPT_depth`
+	if [ ! "${attributecheck}" ] ; then
+		g.message -e "attribute $GIS_OPT_depth not found. See depth option."
+		exit 1
+	fi
+fi
+
+# if [ `echo $GIS_OPT_dt | awk '{print $0 % 1}'` != "0" ] ; then
+	# g.message -e "time increment must be an integer."
+	# exit 1
+# else
+	# dt=`echo $GIS_OPT_dt | awk '{print $0*1}'`
+# fi
+dt=`echo $GIS_OPT_dt | awk '{print $0*1}'`
+
+if [ `echo "$GIS_OPT_t % $GIS_OPT_dt" | bc` != "0" ] ; then
+	incrementcheck=`echo "$GIS_OPT_t % $dt" | bc`
+	duration=`echo "scale=0; $GIS_OPT_t + $dt - $incrementcheck" | bc`
+	g.message -w " simulation duration changed from '$GIS_OPT_t' to '$duration' so as to satisfy integer number of iterations."
+else
+	duration=$GIS_OPT_t
+fi
+iter=`echo "scale=0;$duration/$dt"| bc`
+
+
+#---------------------------------------------
+# Check for Clawpack and avac
+#---------------------------------------------
+if [ ! -x "`echo $CLAW`" ] ; then
+	g.message -e "failed to detect Clawpack environment, install Clawpack first."
+	exit 1
+fi
+if [ ! -x "`echo $CLAW/geoclaw/examples/avac/`" ] ; then
+	g.message -e "failed to detect avac environment, install avac first."
+	exit 1
+fi
+
+
+#---------------------------------------------
+# Check for awk
+#---------------------------------------------
+if ! echo test | awk '{print $0}' > /dev/null 2>&1; then
+	g.message -e "`basename $0`: awk required, please install awk/gawk first" 1>&2
+	exit 1
+fi
+
+
+#---------------------------------------------
+# save command line
+#---------------------------------------------
+if [ "$1" != "@ARGS_PARSED@" ] ; then
+    CMDLINE=`basename "$0"`
+    for arg in "$@" ; do
+        CMDLINE="$CMDLINE \"$arg\""
+    done
+    export CMDLINE
+fi
+
+
+#---------------------------------------------
+# Functions handling user break
+#---------------------------------------------
+Cleanup()
+{
+	#----
+	#cleaning temporary directory
+	#----
+	if [ -d "$GIS_MAP_PATH/.tmp/avac" ]; then
+		rm -r "$GIS_MAP_PATH"/.tmp/avac/
+	fi
+	#----
+	#cleaning temporary region settings
+	#----
+	g.region region=$regionbackup
+	g.remove -f type=region name=$regionbackup --quiet
+}
+
+Cleanexit()
+{
+	g.message -w "User break !"
+	Cleanup
+	exit 1
+}
+trap "Cleanexit" 2 3 15
+
+
+#---------------------------------------------
+# setting up a working directory
+#---------------------------------------------
+if [ ! -d "$GIS_MAP_PATH/.tmp" ] ; then
+	mkdir "$GIS_MAP_PATH/.tmp"
+fi
+
+if [ ! -d "$GIS_MAP_PATH/.tmp/avac" ] ; then
+	mkdir "$GIS_MAP_PATH/.tmp/avac"
+fi
+cd "$GIS_MAP_PATH/.tmp/avac"
+
+
+#---------------------------------------------
+# import avac primitive files
+#---------------------------------------------	
+cp $CLAW/geoclaw/examples/avac/* .
+
+
+#---------------------------------------------
+# get current region settings
+#---------------------------------------------
+eval `g.region -g`
+regionbackup="avac_$$"
+g.region save=$regionbackup
+
+
+#---------------------------------------------
+# feed voellmy.data
+#---------------------------------------------	
+echo "# voellmy parameters set by r.avac ">voellmy.data
+echo \ >>voellmy.data
+echo "$GIS_OPT_RHO =: snow_density ">>voellmy.data
+echo "$GIS_OPT_XI =: Voellmy xi ">>voellmy.data
+echo "$GIS_OPT_MU =: Voellmy mu ">>voellmy.data
+echo "$GIS_OPT_VTHRES =: velocity threshold ">>voellmy.data
+echo "$GIS_OPT_BSLOPE =: beta_slope ">>voellmy.data
+echo \ >>voellmy.data
+
+
+#---------------------------------------------
+# feed setrun.py
+#---------------------------------------------	
+awk -v nt="$iter" -v t="$duration" '/# Output nout frames at equally spaced times up to tfinal/{ print; print "        clawdata.num_output_times = " nt"\n        clawdata.tfinal = " t; next }1' setrun.py > setrun.py.1
+awk -v n="$n" -v s="$s" -v w="$w" -v e="$e" '/# Lower and upper edge of computational domain/{ print; print "    clawdata.lower[0] = " w"\n    clawdata.upper[0] = " e"\n    clawdata.lower[1] = " s"\n    clawdata.upper[1] = " n"\n"; next }1' setrun.py.1 > setrun.py.2
+awk -v c="$cols" -v r="$rows" '/# Number of grid cells: Coarsest grid/{ print; print "    clawdata.num_cells[0] = " c"\n    clawdata.num_cells[1] = " r"\n"; next }1' setrun.py.2 > setrun.py
+rm setrun.py.1 setrun.py.2
+
+
+#---------------------------------------------
+# setting up input data i.e. initial conditions and topo
+#---------------------------------------------
+rinitial="ravac_$$"
+v.to.rast input=$GIS_OPT_za type=area output=$rinitial use=attr attribute_column=h
+r.null map=$rinitial null=0
+r.out.xyz input=$rinitial output=initial0.xyz separator=space
+cat initial0.xyz | awk '{printf"%.1f %.1f %.1f\n",$1,$2,$3}'>initial.xyz
+rm initial0.xyz
+g.remove -f type=rast name=$rinitial
+
+g.region grow=2
+r.out.gdal -f --overwrite input=$GIS_OPT_dem output=topo0.asc format=AAIGrid type=Float64 nodata=-9999
+head -n6 topo0.asc >topo.asc
+tail -n +7 topo0.asc  | sed 's/ /\n/g' >>topo.asc
+rm topo0.asc
+g.region region=$regionbackup
+
+
+#---------------------------------------------
+# run GeoClaw code
+#---------------------------------------------
+g.message "running geoclaw AVAC code..."
+
+if [ "$GIS_FLAG_c" -eq 1 ] ; then
+	make clobber
+fi
+make clean
+make .output
+
+
+#---------------------------------------------
+# dispatching GeoClaw output
+#---------------------------------------------
+cd _output
+
+g.message "splitting AVAC output..."
+
+fortsplit() { in=$1; i=0; awk '/grid/{next}/AMR/{amr=$1;i++}{print>FILENAME"_"sprintf("%02d",amr)"_"sprintf("%03d",i)".split"}' $in; }
+export -f fortsplit
+parallel fortsplit {} ::: fort.q*
+
+g.message "formating GRASS ASCII grids..."
+
+gridasc_h() { in=$1; out=$2; awk ' NR==2{cols=$1} NR==3{rows=$1} NR==4{west=$1} NR==5{south=$1} NR==6{dx=$1} NR==7{dy=$1} END{printf "north: %.2f\nsouth: %.2f\neast: %.2f\nwest: %.2f\nrows: %.0f\ncols:%.0f\n",south+rows*dy,south,west+cols*dx,west,rows,cols}' $in > $out.h.asc;tail -n +9 $in | sed 's/^[ ]*$//g' | awk 'BEGIN{RS="";FS="\n";ORS="\n";OFS=" "}{a[i++]=$0} END {$1=$1;while(i--) print a[i]}' | awk '{print $1}' >> $out.h.asc; }
+export -f gridasc_h
+parallel gridasc_h {} {.} ::: *.split
+
+gridasc_p() { awk ' NR==2{cols=$1} NR==3{rows=$1} NR==4{west=$1} NR==5{south=$1} NR==6{dx=$1} NR==7{dy=$1} END{printf "north: %.2f\nsouth: %.2f\neast: %.2f\nwest: %.2f\nrows: %.0f\ncols: %.0f\n",south+rows*dy,south,west+cols*dx,west,rows,cols}' $1 >$2.p.asc;tail -n +9 $1 | sed 's/^[ ]*$//g' | awk 'BEGIN{RS="";FS="\n";ORS="\n";OFS=" "}{a[i++]=$0} END {$1=$1;while(i--) print a[i]}' | awk -v rho=$3 -v epsilon=1.0E-4 '{($1 > epsilon )?press=(0.5 * rho * ( ( $3 / $1 )^2 + ( $2 /$1 )^2 ) / 1000 ):press="0.0";print press}' >> $2.p.asc; }
+export -f gridasc_p
+parallel gridasc_p {} {.} $GIS_OPT_rho ::: *.split
+
+
+
+#---------------------------------------------
+# remove possible previous strds
+#---------------------------------------------
+
+if [ $ctrl ] ; then
+	t.remove -rf inputs="$GIS_OPT_simul"_h
+	t.remove -rf inputs="$GIS_OPT_simul"_p
+	g.message "strds "$GIS_OPT_simul"_h and "$GIS_OPT_simul"_p (and associated maps) removed"
+fi
+
+
+
+#---------------------------------------------
+# importing h and p raster maps 
+#---------------------------------------------
+
+if [ -f rinascii.txt ]; then
+	rm rinascii.txt
+fi
+
+g.message "importing source maps within GRASS GIS :"
+
+#parallelization seems to be less performant than xars method...
+# rinascii() { out="$3".$2"_"`echo $1 | cut -c7-`; r.in.ascii in=$1 out=$out; }
+# export -f rinascii
+# 
+# for k in {h,p};do
+	# g.message "importing $k parameter map..."
+	# parallel rinascii {} $GIS_OPT_simul $k ::: *.$k.asc
+# done
+
+for k in {h,p};do
+	for i in *.$k.asc; do
+		itr=`echo $i | cut -c7-`
+		echo "in=$i out="$k".$GIS_OPT_simul"_"$itr" >>rinascii.txt
+	done
+	g.message "importing $k parameter map..."
+	xargs -a "rinascii.txt" -n 2 -P 128 r.in.ascii --o --quiet
+	rm rinascii.txt
+	rm *.$k.asc
+done
+
+
+#---------------------------------------------
+# patching source maps 
+#---------------------------------------------
+
+outres=`echo "scale=2;$nsres / 2" | bc`
+g.region -a res=$outres #rast=`g.list rast sep=comma pattern="*$GIS_OPT_simul*"`
+
+if [ -f rpatch.txt ]; then
+	rm rpatch.txt
+fi
+
+g.message "patching source maps :"
+
+for k in {h,p};do
+	g.message "patching $k parameter maps..."
+	for i in `g.list rast pattern="$k"."$GIS_OPT_simul*" | sort -r | awk '{print substr($0,1,length($0)-13)}' |uniq`; do
+		echo "in=`g.list rast pattern=$i* |sort -r | awk 'BEGIN{ORS=","} {print}'` out=$i" >>rpatch.txt
+	done
+	xargs -a "rpatch.txt" -n 2 -P 128 r.patch --o --quiet
+	rm rpatch.txt
+done
+
+g.remove -f type=rast pattern=*.asc --q
+
+g.message "creating and feeding time series..."
+
+t.create output="$GIS_OPT_simul"_h type=strds temporaltype=relative title="AVAC GeoCLAW simulation " description="snow height"
+t.create output="$GIS_OPT_simul"_p type=strds temporaltype=relative title="AVAC GeoCLAW simulation " description="pressure"
+listh=`g.list rast sep=comma pattern=h.$GIS_OPT_simul*`
+listp=`g.list rast sep=comma pattern=p.$GIS_OPT_simul*`
+
+if [ `echo $GIS_OPT_dt | awk '{print $0 % 1}'` != "0" ] ; then
+	dtround=`awk "BEGIN {printf \"%.0f\n\", $GIS_OPT_dt}"`
+	if [ "$dtround" -eq "0" ] ;then
+		let $((dtround++))
+	fi
+	g.message -w "forced to set STRDS time increment to $dtround second(s), while actual time increment is $GIS_OPT_dt. "
+	t.register --o input="$GIS_OPT_simul"_h type=raster start=0 unit=seconds increment="$dtround" maps=$listh --quiet
+	t.register --o input="$GIS_OPT_simul"_p type=raster start=0 unit=seconds increment="$dtround" maps=$listp --quiet
+else
+	t.register --o input="$GIS_OPT_simul"_h type=raster start=0 unit=seconds increment="$dt" maps=$listh --quiet
+	t.register --o input="$GIS_OPT_simul"_p type=raster start=0 unit=seconds increment="$dt" maps=$listp --quiet
+fi
+
+t.rast.colors --q input="$GIS_OPT_simul"_h color=blues
+t.rast.colors --q input="$GIS_OPT_simul"_p color=reds
+
+
+#---------------------------------------------
+# Testing m flag 
+#---------------------------------------------
+if [ "$GIS_FLAG_m" -eq 1 ] ; then
+	# compute max(h)
+	output="$GIS_OPT_simul"_h_max
+	t.rast.series --overwrite input="$GIS_OPT_simul"_h method=maximum where="start_time>0" output=$output
+	r.colors map=$output color=blues
+	g.message "max(h) raster map saved to $output"
+	# compute max(p)
+	output="$GIS_OPT_simul"_p_max
+	t.rast.series --overwrite input="$GIS_OPT_simul"_p method=maximum where="start_time>0" output=$output
+	r.colors map=$output color=reds
+	g.message "max(p) raster map saved to $output"
+fi
+
+
+#---------------------------------------------	
+# regular exit
+#---------------------------------------------
+g.region region=$regionbackup
+Cleanup
+exit 0
