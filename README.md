@@ -52,6 +52,9 @@ Application examples:
 ***************
 
 Christophe Ancey, EPFL, Switzerland
+
 Vincent Bain, Toraval, France
+
 version 1.0 October 2019
+
 version 1.1 June 2020
