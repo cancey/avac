@@ -57,12 +57,22 @@ def setrun(claw_pkg='geoclaw'):
     # Number of space dimensions:
     clawdata.num_dim = num_dim
 
+    #Addons
+    import AddSetrun
+    import AddZoom
+    
     # Lower and upper edge of computational domain:
- 
- 
+    clawdata.lower[0] = AddSetrun.xmin
+    clawdata.upper[0] = AddSetrun.xmax
+
+    clawdata.lower[1] = AddSetrun.ymin
+    clawdata.upper[1] = AddSetrun.ymax
+	 
+	 
 
     # Number of grid cells: Coarsest grid
-
+    clawdata.num_cells[0] = AddSetrun.nx
+    clawdata.num_cells[1] = AddSetrun.ny 
 
     # ---------------
     # Size of system:
@@ -106,6 +116,8 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style==1:
         # Output nout frames at equally spaced times up to tfinal:
+        clawdata.num_output_times = AddSetrun.nsim
+        clawdata.tfinal = AddSetrun.tmax
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
@@ -148,18 +160,18 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 0.016
+    clawdata.dt_initial = AddSetrun.dt_init
 
     # Max time step to be allowed if variable dt used:
     clawdata.dt_max = 1e+99
 
     # Desired Courant number if variable dt used, and max to allow without
     # retaking step with a smaller dt:
-    clawdata.cfl_desired = 0.9
-    clawdata.cfl_max = 1.0
+    clawdata.cfl_desired = AddSetrun.cfl_desired
+    clawdata.cfl_max = 0.95
 
     # Maximum number of time steps to allow between output times:
-    clawdata.steps_max = 5000
+    clawdata.steps_max = AddSetrun.nb_max_iter
 
 
 
@@ -249,10 +261,12 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 1
+    amrdata.amr_levels_max = AddSetrun.refinement
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [1,1,1]
+    amrdata.refinement_ratios_x = [2,4,8]
+    amrdata.refinement_ratios_y = [2,4,8]
+    amrdata.refinement_ratios_t = [2,4,8]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
@@ -301,6 +315,15 @@ def setrun(claw_pkg='geoclaw'):
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
     #regions.append([1, 1, 0., 1.e10, 925720,927160., 6451140.,6452155.])
+    if AddSetrun.refinement_area == 1:
+       regions.append([1, 2, 0., 1.e10, AddSetrun.xmin, \
+       AddSetrun.xmax, AddSetrun.ymin, AddSetrun.ymax])
+    elif AddSetrun.refinement_area == 2:
+       regions.append([1, 2, 0., 1.e10, AddZoom.x_zoom_min, \
+       AddZoom.x_zoom_max, AddZoom.y_zoom_min, AddZoom.y_zoom_max])    
+       
+ 
+       
     #regions.append([2, 3, 3., 1.e10,   52., 72.,   52., 72.])
     #regions.append([2, 3, 3., 1.e10,   75., 95.,   -10.,  10.])
     #regions.append([2, 4, 3.4, 1.e10,   57., 68.,   57., 68.])
@@ -319,7 +342,25 @@ def setrun(claw_pkg='geoclaw'):
     #     y = .001
      #    rundata.gaugedata.gauges.append([gaugeno, x, y, 0., 1e10])
 
+    # Points on a uniform 2d grid:
 
+    if AddZoom.zooming == True:
+       from clawpack.geoclaw import fgmax_tools
+       fg = fgmax_tools.FGmaxGrid()
+       fg.point_style = 2  # uniform rectangular x-y grid
+       fg.x1 = AddZoom.x_zoom_min
+       fg.x2 = AddZoom.x_zoom_max
+       fg.y1 = AddZoom.y_zoom_min
+       fg.y2 = AddZoom.y_zoom_max
+       fg.dx = AddZoom.dx  # desired resolution of fgmax grid
+       fg.dy = AddZoom.dy
+       fg.min_level_check = amrdata.amr_levels_max # which levels to monitor max on
+       fg.tstart_max = AddZoom.tstart  # just before wave arrives
+       fg.tend_max = AddZoom.tmax    # when to stop monitoring max values
+       fg.dt_check = AddZoom.dt      # how often to update max values
+       fg.interp_method = 0   # 0 ==> pw const in cells, recommended
+       rundata.fgmax_data.fgmax_grids.append(fg)  # written to fgmax_grids.data
+       rundata.fgmax_data.num_fgmax_val = 5
     
 
     return rundata
@@ -342,18 +383,21 @@ def setgeo(rundata):
         raise AttributeError("Missing geo_data attribute")
 
 
-       
+    import AddSetrun       
     # == Physics ==
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 1
     geo_data.earth_radius = 6367.5e3
+
+    # == correctif val d'isère
+    rundata.topo_data.topo_missing = AddSetrun.nodatavalue
 
     # == Forcing Options
     geo_data.coriolis_forcing = False
 
     # == Algorithm and Initial Conditions ==
     geo_data.sea_level = 0.0
-    geo_data.dry_tolerance = 1.e-3
+    geo_data.dry_tolerance = AddSetrun.DryWetLimit
     geo_data.friction_forcing = True
     geo_data.manning_coefficient = 0.025
     geo_data.friction_depth = 20.0
@@ -369,7 +413,7 @@ def setgeo(rundata):
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 2, 0., 1.e10, 'topo.asc'])
+    topo_data.topofiles.append([2, 1, 3, 0., 1.e10, 'topo.asc'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
