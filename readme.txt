@@ -31,8 +31,8 @@ ClawPack files:
 
 Documentation:
 - readme (this page)
-- ravac_readme_en.txt: documetation in English for using r.avac
-- ravac_readme_fr.txt: documetation in French for using r.avac
+- ravac_readme_en.txt: documentation in English for using r.avac
+- ravac_readme_fr.txt: documentation in French for using r.avac
 - article_avac_en.pdf: documentation on AVAC in English
 - article_avac_fr.pdf: documentation on AVAC in French
 - r.avac_manual_en.pdf: documentation on the r.avac addon in English
