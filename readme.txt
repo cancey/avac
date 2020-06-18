@@ -1,6 +1,6 @@
 # AVAC: 
 Computing snow avalanches
-AVAC is a numerical code for simulating flowing avalanches using the ClawPack and GeoClaw libraries. It solves the two-dimensional Saint-Venant equations on an irregular topography. It uses the Voellmy empirical equation to describe flow resistance.
+AVAC is a numerical code for simulating flowing avalanches using the ClawPack and GeoClaw libraries. It solves the two-dimensional Saint-Venant equations on an irregular topography (in a Cartesian frame). It uses the Coulomb or Voellmy empirical equation to describe flow resistance.
 
 It also includes additional modules for importing and exporting data:
 - Mathematica notebooks for preparing the input topographic data and transforming the output files into raster files and animations.
@@ -16,13 +16,17 @@ The AVAC code has been extensively tested on Linux machines. See the ClawPack in
 
 
 ClawPack files:
+- AddSetrun.py
+- AddZoom.py
 - b4step2.f90
+- launcher_random.py
 - module_voellmy.f90
 - setprob.f90
 - Makefile
 - setrun.py
 - src2.f90
 - voellmy.data
+- valout.f90
 
 Documentation:
 - readme (this page)
@@ -36,7 +40,7 @@ Documentation:
 
 Mathematica notebooks:
 - PreProcessClawpack: creating the initial.xyz file from a shapefile
-- PostProcessClawpack: visualizing and exporting the fortq.xxxx into rasters
+- PostProcessClawpack: visualizing and exporting the fortq.xxxx and rasterxxxx into rasters (ESRI format)
 
 GRASS addon:
 - r.avac
@@ -50,3 +54,4 @@ Application examples:
 Christophe Ancey, EPFL, Switzerland
 Vincent Bain, Toraval, France
 version 1.0 October 2019
+version 1.1 June 2020

@@ -1,0 +1,8 @@
+# voellmy/coulomb parameters 
+
+300 =: snow_density
+800 =: Voellmy xi
+0.2 =: Voellmy/Coulomb mu
+0.3 =: velocity threshold
+1.1 =: beta_slope
+0 =: coulomb
