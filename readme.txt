@@ -1,6 +1,7 @@
 # AVAC: 
 Computing snow avalanches
-AVAC is a numerical code for simulating flowing avalanches using the ClawPack and GeoClaw libraries. It solves the two-dimensional Saint-Venant equations on an irregular topography (in a Cartesian frame). It uses the Coulomb or Voellmy empirical equation to describe flow resistance.
+
+AVAC is a numerical code for simulating flowing avalanches using the ClawPack and GeoClaw libraries (www.clawpack.org). It solves the two-dimensional Saint-Venant equations on an irregular topography (in a Cartesian frame). It uses the Coulomb or Voellmy empirical equation to describe flow resistance.
 
 It also includes additional modules for importing and exporting data:
 - Mathematica notebooks for preparing the input topographic data and transforming the output files into raster files and animations.
