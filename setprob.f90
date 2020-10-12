@@ -1,12 +1,13 @@
-      
-      
+
+
       subroutine setprob
       implicit none
+      integer coulomb
       double precision snow_density, xi, mu, threshold, beta_slope
       character*12 fname
       integer iunit
-      common /voellmy/ snow_density, xi, mu, threshold, beta_slope
-       
+      common /voellmy/ snow_density, xi, mu, threshold, beta_slope, coulomb
+
 !
 !     # read data values for this problem
 !
@@ -24,6 +25,7 @@
       read(7,*) mu
       read(7,*) threshold
       read(7,*) beta_slope
+      read(7,*) coulomb
 
 
       close(unit=7)
@@ -32,6 +34,6 @@
       print *, 'mu = ',mu
       print *, 'u_* = ',threshold
       print *, 'beta = ',beta_slope
- 
+      print *, 'coulomb = ',coulomb
+
       end subroutine setprob
- 
