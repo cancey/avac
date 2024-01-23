@@ -66,13 +66,24 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                                      "e26.16,'    ylow', /,"                // &
                                      "e26.16,'    dx', /,"                  // &
                                      "e26.16,'    dy',/)"
+
+    character(len=*), parameter :: header_formatRaster =                       &
+                                    "(i6,'                 nghost',/,"      // &
+                                     "i6,'                 mx',/,"          // &
+                                     "i6,'                 my',/"           // &
+                                     "e26.16,'    xlow', /, "               // &
+                                     "e26.16,'    ylow', /,"                // &
+                                     "e26.16,'    dx', /,"                  // &
+                                     "e26.16,'    dy',/)"
+
+
     character(len=*), parameter :: t_file_format = "(e18.8,'    time', /,"  // &
                                            "i6,'                 meqn'/,"   // &
                                            "i6,'                 ngrids'/," // &
                                            "i6,'                 naux'/,"   // &
                                            "i6,'                 ndim'/,"   // &
                                            "i6,'                 nghost'/,/)"
-    
+
 
     ! Output timing
     call system_clock(clock_start,clock_rate)
@@ -87,7 +98,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     ! Note:  Currently outputs all aux components if any are requested
     out_aux = ((output_aux_num > 0) .and.               &
               ((.not. output_aux_onlyonce) .or. (abs(time - t0) < 1d-90)))
-                
+
     ! Output storm track if needed
     if (storm_specification_type /= 0) then
         call output_storm_location(time)
@@ -101,6 +112,9 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     file_name(5) = 'clawxxxx.h5'
     file_name(6) = 'rasterxxxx'
     num_stop = frame
+    
+
+    
     do i = 10, 7, -1
         digit = mod(num_stop, 10)
         do j = 1, 6
@@ -121,7 +135,10 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     ! Write out fort.q file (and fort.bXXXX and clawxxxx.h5 files if necessary)
     ! Here we let fort.q be out_unit and the the other two be out_unit + 1
     open(unit=out_unit, file=file_name(1), status='unknown', form='formatted')
+    ! open raster file where the data are written in the xy format
     open(unit=out_raster, file=file_name(6), status='unknown', form='formatted')
+    
+    
     if (output_format == 3) then
         open(unit=binary_unit, file=file_name(4), status="unknown",    &
              access='stream')
@@ -172,6 +189,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 
                         alloc(iadd(m, i, j)) = 0.d0
                     end forall
+            ! Export to raster format
 
                     do j = num_ghost + 1, num_cells(2) + num_ghost
                         do i = num_ghost + 1, num_cells(1) + num_ghost
@@ -180,8 +198,8 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                             h = alloc(iadd(1, i, j))
                             hu = alloc(iadd(2, i, j))
                             hv = alloc(iadd(3, i, j))
-                            xx = lower_corner(1)+(i-0.5)*delta(1)
-                            yy = lower_corner(2)+(j-0.5)*delta(2)
+                            xx = lower_corner(1)+(i-3)*delta(1)
+                            yy = lower_corner(2)+(j-3)*delta(2)
                             if (h == 0.d0) then
                                vit = 0.
                             else
@@ -240,7 +258,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                 ! HDF5 output
                 case(4)
 #ifdef HDF5
-                ! Create data space - handles dimensions of the corresponding 
+                ! Create data space - handles dimensions of the corresponding
                 ! data set - annoyingling need to stick grid size into other
                 ! data type
                 dims = (/ num_eqn, num_cells(1) + 2 * num_ghost,               &
@@ -261,7 +279,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 #endif
                 case default
                     print *, "Unsupported output format", output_format,"."
-                    stop 
+                    stop
 
             end select
             grid_ptr = node(levelptr, grid_ptr)
@@ -291,7 +309,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
         else if (output_format == 4) then
             ! Create group for aux
             call h5gcreate_f(hdf_file, "/aux", aux_group, hdf_error)
-#endif            
+#endif
         end if
 
         do level = level_begin, level_end
@@ -312,7 +330,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                     ! ASCII output
                     case(1)
 
-                        ! We only output header info for aux data if writing 
+                        ! We only output header info for aux data if writing
                         ! ASCII data
                         write(out_unit, header_format) grid_ptr, level, &
                                                        num_cells(1),    &
@@ -352,7 +370,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                     ! HDF5 output
                     case(4)
 #ifdef HDF5
-                ! Create data space - handles dimensions of the corresponding 
+                ! Create data space - handles dimensions of the corresponding
                 ! data set - annoyingling need to stick grid size into other
                 ! data type
                 dims = (/ num_aux, num_cells(1) + 2 * num_ghost,               &
@@ -376,7 +394,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 #endif
                     case default
                         print *, "Unsupported output format", output_format,"."
-                        stop 
+                        stop
 
                 end select
                 grid_ptr = node(levelptr, grid_ptr)
@@ -406,7 +424,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     ! Write out timing stats
     open(unit=out_unit, file=timing_file_name, form='formatted',         &
              status='old', action='write', position='append')
-    
+
     timing_line = "(e16.6, ', ', e16.6, ', ', e16.6,"
     do level=1, mxnest
         timing_substr = "', ', e16.6, ', ', e16.6, ', ', e16.6"
@@ -427,7 +445,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     write(out_unit, timing_line) time, timeTick_overall, t_CPU_overall, &
         (real(tvoll(i), kind=8) / real(clock_rate, kind=8), &
          tvollCPU(i), rvoll(i), i=1,mxnest)
-    
+
     close(out_unit)
 
     ! ==========================================================================
@@ -451,7 +469,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     call cpu_time(cpu_finish)
     timeValout = timeValout + clock_finish - clock_start
     timeValoutCPU = timeValoutCPU + cpu_finish - cpu_start
-    
+
 
 contains
 
