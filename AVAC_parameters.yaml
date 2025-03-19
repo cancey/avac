@@ -1,0 +1,36 @@
+animation:
+  n_out: 45
+  variable: depth
+computation:
+  boundary: extrap
+  cfl_max: 1
+  cfl_target: 0.5
+  domain_cell: 2
+  dry_limit: 0.01
+  max_iter: 100000
+  nb_simul: 10
+  output_directory: _output
+  refinement: 1
+  t_max: 90
+output:
+  delta_t: 1
+  output_format: binary32
+  verbosity: 0
+release:
+  correction_elevation: true
+  correction_slope: true
+  d0: 1
+  gradient_hypso: 0.03
+  nu: 0.2
+  theta_cr: 30
+  z_ref: 1800
+rheology:
+  beta: 1.1
+  model: Voellmy
+  mu: 0.22
+  rho: 400
+  u_cr: 0.1
+  xi: 400
+topography:
+  dem: new_raster2.asc
+  starting_areas: ZA_1.shp
