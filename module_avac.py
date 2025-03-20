@@ -190,8 +190,10 @@ def install_avac(**kwargs):
 
 def make_output(avac_p,verbosity=True):
     """
-    Execute Make clean, then Make :output
-    Input: verbosity (Boolean): If True, displays messages during execution; otherwise,
+    Execute 'Make clean', then 'Make .output'
+    Input: 
+    * avac_p : dictionary of configuration parameters
+    * optional argument -> verbosity (Boolean): If True, displays messages during execution; otherwise,
                             directs the messages to the file 'avac.log'.
     Output: output files in _output, avac.log.
     """
@@ -239,7 +241,9 @@ def make_output(avac_p,verbosity=True):
 def make_animation(avac_p,verbosity=True):
     """
     Execute the animation script make_fgout_animation.py
-    Input: verbosity (Boolean): If True, displays messages during execution; otherwise,
+    Input: 
+    * avac_p : dictionary of configuration parameters
+    * Optional argument -> verbosity (Boolean): If True, displays messages during execution; otherwise,
                             directs the messages to the file 'animation.log'.
     Output: mp4 and html files, animation.log.
     """
