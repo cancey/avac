@@ -1,5 +1,5 @@
 animation:
-  n_out: 45
+  n_out: 100
   variable: depth
 computation:
   boundary: extrap
@@ -8,10 +8,12 @@ computation:
   domain_cell: 2
   dry_limit: 0.01
   max_iter: 100000
-  nb_simul: 10
+  nb_simul: 5
   output_directory: _output
   refinement: 1
-  t_max: 90
+  t_max: 600
+date:
+  date: 2025-03-21 14:22:47.017145
 output:
   delta_t: 1
   output_format: binary32
@@ -27,10 +29,10 @@ release:
 rheology:
   beta: 1.1
   model: Voellmy
-  mu: 0.22
+  mu: 0.4
   rho: 400
   u_cr: 0.1
-  xi: 400
+  xi: 200
 topography:
   dem: new_raster2.asc
   starting_areas: ZA_1.shp
