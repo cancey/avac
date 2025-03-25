@@ -305,7 +305,7 @@ def make_animation(avac_p,verbosity=True):
 # post-processing #
 ###################
 fn_eta      = lambda q: q[3,:,:]                     # eta = z_b +h
-fn_sol      = lambda q: q[3,:,:] - q[0,:,:]          # z_b
+fn_ground   = lambda q: q[3,:,:] - q[0,:,:]          # z_b
 fn_h        = lambda q: q[0,:,:]                     # h
 fn_husquare = lambda q: q[1,:,:]**2+q[2,:,:]**2      # h²(u²+v²)
 fn_extract  = lambda q: array((fn_h(q),fn_eta(q))) # (h, eta)
@@ -352,6 +352,7 @@ def extract_values(text):
     The Boolean is True when extraction is successful, False otherwise.
     The remark is a text generated when something unusual is met
     """
+    text = text.lower()  # transforms into lower cases in case upper cases are used
     # Regular expression to find the first number
     number_pattern = r'-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b'  # Matches integers, floats, and scientific notation
     # Search for the first number
@@ -407,7 +408,7 @@ def determine_file_type(file):
     """
     try:
         with open(file, "r") as file:
-            text = file.readline().strip()
+            text = file.readline().strip().lower()
         # Regular expression to find the first number
         number_pattern = r'-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b'  # Matches integers, floats, and scientific notation
         # Search for the first number
